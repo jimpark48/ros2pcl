@@ -30,6 +30,7 @@ add_definitions(${PCL_DEFINITIONS})
 #add_executable(ros2pcl ${SRC})
 add_executable(ros2pcl src/main.cpp)
 add_executable(flat src/flat.cpp)
+add_executable(flat2 src/flat2.cpp)
 
 include_directories(
   include
@@ -41,3 +42,4 @@ target_link_libraries(ros2pcl
 ${catkin_LIBRARIES}
 )
 target_link_libraries(flat ${catkin_LIBRARIES})
+target_link_libraries(flat2 ${catkin_LIBRARIES})
