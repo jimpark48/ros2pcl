@@ -203,7 +203,7 @@ class Flat
         }
     }
 
-    int findclosepoint(int currentp, pcl::PointCloud<PointT> findclosepointcloud, int min_point) {
+    int findclosepoint_nextrow(int currentp, pcl::PointCloud<PointT> findclosepointcloud, int min_point) {
         pcl::PointXYZ closep1 = findclosepointcloud.points[currentp];
         pcl::PointXYZ closep2;
         double min;
@@ -243,7 +243,7 @@ class Flat
             for(int j=i; j<next_row_point-1; j++) {
                 point1 = rawpointcloud.points[j];
                 point2 = rawpointcloud.points[j+1];
-                int close_point = findclosepoint(j, rawpointcloud, next_row_point);
+                int close_point = findclosepoint_nextrow(j, rawpointcloud, next_row_point);
             // ROS_INFO("current : %d, close_point : %d", j, close_point);
                 point3 = rawpointcloud.points[close_point]; 
                 //point4 = rawpointcloud.points[j+1+40];
@@ -281,6 +281,23 @@ class Flat
         normal_pub.publish(markers);
     }
 
+    int findclosepoint(pcl::PointXYZ centerpot, pcl::PointCloud<PointT>::Ptr reference_cloud, int start)
+    {
+        int reference_size = reference_cloud->size();
+        double min = 99;
+        double distance;
+        int min_pos;
+        for(int i = start; i<reference_size; i++) {
+            distance = sqrt((centerpot.x - reference_cloud->points[i].x)*(centerpot.x - reference_cloud->points[i].x) + 
+                        (centerpot.y - reference_cloud->points[i].y)*(centerpot.y - reference_cloud->points[i].y));
+            if(distance < min) {
+                min = distance;
+                min_pos = i;
+            }
+        }
+        return min_pos;
+    }
+
     void msgCallbackpoint(const sensor_msgs::PointCloud2ConstPtr &pointcloudraw) 
     {
     
@@ -298,7 +315,7 @@ class Flat
 
         visualization_msgs::MarkerArray markers2;
 
-        while(ros::ok()) {
+        /*while(ros::ok()) {
             try{
                 aidinvi_body = tfBuffer.lookupTransform("world", "aidinvi_body", ros::Time(0));
                 camera_link = tfBuffer.lookupTransform("aidinvi_body", "camera_link", ros::Time(0));
@@ -319,15 +336,17 @@ class Flat
                 camera_link_vec_x[1] = -camera_link_vec_y[0];
                 camera_link_vec_x[2] = 0;
 
-                show_vector(camera_link_pos, camera_link_pos, camera_link_pos, camera_link_vec_y, &markers2, 2);
+                //show_vector(camera_link_pos, camera_link_pos, camera_link_pos, camera_link_vec_y, &markers2, 2);
                 //show_vector(camera_link_pos, camera_link_pos, camera_link_pos, camera_link_vec_x, &markers2, 2);
-                axis_pub.publish(markers2);
+               // axis_pub.publish(markers2);
 
                 break;
             }
             catch (tf2::TransformException &ex) {
             }
-        }
+        }*/
+
+
         //int num = 40*30;
         int num = 10;
         //ROS_INFO("flatbefore");
@@ -356,6 +375,89 @@ class Flat
         }        
         
         int transformed_cloud_size = transformed_cloud->size();
+        //ROS_INFO("transformed_cloud_size : %d", transformed_cloud_size);
+        double sum_x = 0;
+        double sum_y = 0;
+        double sum_z = 0;
+        for(int i = 0; i<transformed_cloud_size; i++) {
+            sum_x = sum_x + transformed_cloud->points[i].x;
+            sum_y = sum_y + transformed_cloud->points[i].y;
+            sum_z = sum_z + transformed_cloud->points[i].z;
+        }
+        pcl::PointXYZ center;
+        center.x = sum_x/transformed_cloud_size;
+        center.y = sum_y/transformed_cloud_size;
+        center.z = sum_z/transformed_cloud_size;;
+
+        int center_pos = findclosepoint(center, transformed_cloud, 0);
+        pcl::PointXYZ center_point;
+        center_point = transformed_cloud->points[center_pos];
+        int center_pos2 = findclosepoint(center_point, transformed_cloud, center_pos+3);
+        pcl::PointXYZ center_point2;
+        center_point2 = transformed_cloud->points[center_pos2];
+
+        camera_link_vec_y[0] = center_point.x - center_point2.x;
+        camera_link_vec_y[1] = center_point.y - center_point2.y;
+        camera_link_vec_y[2] = 0;
+
+        camera_link_vec_x[0] = camera_link_vec_y[1];
+        camera_link_vec_x[1] = -camera_link_vec_y[0];
+        camera_link_vec_x[2] = 0;
+
+        pcl::PointXYZ checkpoint;
+        checkpoint = transformed_cloud->points[transformed_cloud_size-1];
+        
+        visualization_msgs::Marker mk;
+        mk.header.frame_id = "/aidinvi_body";
+        mk.header.stamp = ros::Time::now();
+
+        mk.type = visualization_msgs::Marker::SPHERE; //arrow
+        mk.action = visualization_msgs::Marker::ADD;
+
+        mk.lifetime = ros::Duration();
+        mk.ns = "points";
+        mk.id = 1;
+
+        mk.pose.position.x = center_point.x;
+        mk.pose.position.y = center_point.y;
+        mk.pose.position.z = center_point.z;
+
+        mk.scale.x = 0.005;
+        mk.scale.y = 0.005;
+        mk.scale.z = 0.005;
+        
+        mk.color.r = 0;
+        mk.color.g = 0;
+        mk.color.b = 255;
+        mk.color.a = 1;
+
+        markers2.markers.push_back(mk);
+
+        mk.id = 2;
+        mk.pose.position.x = center.x;
+        mk.pose.position.y = center.y;
+        mk.pose.position.z = center.z;  
+
+        markers2.markers.push_back(mk);
+
+        mk.id = 3;
+        mk.pose.position.x = center_point2.x;
+        mk.pose.position.y = center_point2.y;
+        mk.pose.position.z = center_point2.z;  
+
+        markers2.markers.push_back(mk);
+
+        std::vector<double> zaxis_vector;
+        zaxis_vector.resize(3);
+        zaxis_vector = {0, 0, -1};
+
+        center_point.z = center_point.z + 0.5;
+
+        show_vector(center_point, center_point, center_point, camera_link_vec_y, &markers2, 3);
+        show_vector(center_point, center_point, center_point, camera_link_vec_x, &markers2, 3);
+        show_vector(center_point, center_point, center_point, zaxis_vector, &markers2, 3);
+        axis_pub.publish(markers2);
+
         //foothold_pt->header.frame_id = "camera_depth_optical_frame";
         //transformed_cloud->header.frame_id = "world"; 
         transformed_cloud->header.frame_id = "aidinvi_body";
