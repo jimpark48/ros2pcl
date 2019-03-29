@@ -1,0 +1,8 @@
+<launch>
+  <node pkg="ros2pcl" type="flat2" name="flat2" output="screen">
+	<!-- param name="point_cloud_topic_" type="string" value="/ros2pcl/foothold_region"/> -->
+	<!-- param name="frame_id_" type="string" value="/aidinvi_body"/> -->
+	<param name="point_cloud_topic_" type="string" value="/filtered_pcl"/> 
+	<param name="frame_id_" type="string" value="/map"/> 
+  </node>
+</launch>
